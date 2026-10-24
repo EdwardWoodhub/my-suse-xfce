@@ -20,8 +20,10 @@ RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
         open-vm-tools-desktop \
         patterns-xfce-xfce \
         pluma \
+        python3 \
         sddm \
         syncthing \
+        uv \
         wqy-microhei-fonts \
         xorg-x11-server \
         xfce4-terminal \
