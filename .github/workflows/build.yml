@@ -26,7 +26,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: my-x11-suse-vm
+  IMAGE_NAME: my-suse-xfce-vm
   ACTOR_LOWER: edwardwoodhub
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
         id: vars
         run: |
           REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "image_name=${REPO_OWNER}/my-x11-suse-vm" >> $GITHUB_OUTPUT
+          echo "image_name=${REPO_OWNER}/my-suse-xfce-vm" >> $GITHUB_OUTPUT
 
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "tag=daily-$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
@@ -85,12 +85,12 @@ jobs:
             elemental build-iso \
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.tag }} \
             -o . \
-            -n my-x11-suse-vm
+            -n my-suse-xfce-vm
 
       # 步骤 4：将大于 2GB 的 ISO 切割为多个 1.5GB 的文件
       - name: Split ISO
         run: |
-          split -b 1500M my-x11-suse-vm.iso my-x11-suse-vm.iso.part-
+          split -b 1500M my-suse-xfce-vm.iso my-suse-xfce-vm.iso.part-
 
       # 步骤 5：发布切割后的 ISO 分卷到 GitHub Releases
       - name: Publish ISO to GitHub Releases
@@ -100,7 +100,7 @@ jobs:
           github.event_name == 'schedule' ||
           (github.event_name == 'workflow_dispatch' && inputs.release_iso == true)
         with:
-          files: my-x11-suse-vm.iso.part-*
+          files: my-suse-xfce-vm.iso.part-*
           tag_name: ${{ steps.vars.outputs.tag }}
           name: "Build ${{ steps.vars.outputs.tag }}"
           generate_release_notes: true
