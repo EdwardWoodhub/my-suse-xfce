@@ -7,12 +7,14 @@ RUN zypper --non-interactive ar -cfp 90 https://download.opensuse.org/distributi
     zypper --non-interactive ar -cfp 90 https://download.opensuse.org/repositories/M17N:/fonts/16.0/ M17N-fonts || true 
 
 # 3. 导入 GPG 密钥并安装 XFCE 桌面环境与 SDDM
+# glibc-locale-base解决btop：No UTF-8 locale detected
 RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
     zypper --non-interactive in \
         btop \
         fastfetch \
         fontconfig \
         gedit \
+        glibc-locale-base \
         htop \
         konsole \
         meld \
