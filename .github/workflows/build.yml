@@ -10,8 +10,8 @@ on:
         type: boolean
 
   schedule:
-    # 每天 UTC 19:23（北京时间次日 03:23）运行
-    - cron: '23 19 * * *'
+    # 每天 UTC 17:06（北京时间次日 01:06）运行
+    - cron: '06 17 * * *'
 
   push:
     branches:
