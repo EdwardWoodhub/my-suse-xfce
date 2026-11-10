@@ -58,36 +58,6 @@ RUN echo 'Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bi
 RUN mkdir -p /etc/elemental && \
     printf 'install:\n  snapshotter:\n    type: btrfs\n  partitions:\n    recovery:\n      size: 8192\n    state:\n      size: 102400\n' > /etc/elemental/config.yaml
 
-# ------------------------------
-# 4d. 直接 Patch 镜像底层所有 Elemental/GRUB 模板源文件
-# ------------------------------
-RUN find /usr/share /usr/lib /etc -type f \( -name "*.cfg" -o -name "*.sh" -o -name "grub_*" -o -name "*.yaml" \) 2>/dev/null | \
-    xargs grep -l "default_fallback" 2>/dev/null | while read -r file; do \
-        echo "Patching GRUB fallback in: $file"; \
-        # 1. 匹配带引号的情况 (例如 default_fallback="0 1 2 3 4" 或单引号) 统一替换为 "0"
-        sed -i -E 's/default_fallback=["'\''][0-9 ]+["'\'']/default_fallback="0"/g' "$file"; \
-        # 2. 匹配完全不带引号的情况 (例如 default_fallback=0 1 2 3 4) 统一替换为 0
-        sed -i -E 's/default_fallback=[0-9 ]+$/default_fallback=0/g' "$file"; \
-    done || true
-
-# ------------------------------
-# 4e. 注入 Elemental 声明式 OEM 阶段钩子（双保险，拦截安装与升级写盘）
-# ------------------------------
-RUN mkdir -p /system/oem && \
-    printf '%s\n' \
-      'name: "Force GRUB Fallback to 0"' \
-      'stages:' \
-      '  install.after:' \
-      '    - name: "Lock default_fallback to 0 after installation"' \
-      '      commands:' \
-      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /run/elemental/efi/grub_oem_env 2>/dev/null || true' \
-      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /boot/efi/grub_oem_env 2>/dev/null || true' \
-      '  upgrade.after:' \
-      '    - name: "Lock default_fallback to 0 after upgrade"' \
-      '      commands:' \
-      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /run/elemental/efi/grub_oem_env 2>/dev/null || true' \
-      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /boot/efi/grub_oem_env 2>/dev/null || true' \
-      > /system/oem/00_grub_patch.yaml
 
 
 
@@ -126,6 +96,74 @@ RUN useradd -m -G wheel -s /bin/bash peter && \
 # 5. 配置 SDDM 开机自动免密登录 liveuser 进入 XFCE
 #RUN mkdir -p /etc/sddm/sddm.conf.d && \
 #    printf "[Seat:*]\nautologin-user=liveuser\nautologin-user-timeout=0\nuser-session=xfce\n" > /etc/sddm/sddm.conf.d/50-autologin.conf
+
+# ==============================================================================
+# 固化 GRUB 启动锁死与 Fake Boot Assessment 服务
+# 彻底根治 Elemental 启动项随重启向后跌落（回退到旧快照）的问题
+# ==============================================================================
+
+# -------------------------------------------------------------
+# 1. 固化 GRUB custom.cfg 扩展配置
+#    在 GRUB 脚本层锁定 default 为 active，并切断 fallback 级联
+# -------------------------------------------------------------
+RUN mkdir -p /etc/elemental/boot/grubcustom /etc/cos/boot/grubcustom && \
+    printf 'set default="active"\n\
+set saved_entry="active"\n\
+unset next_entry\n\
+unset fallback\n\
+set boot_assessment_check=""\n' > /etc/elemental/boot/grubcustom/custom.cfg && \
+    cp -f /etc/elemental/boot/grubcustom/custom.cfg /etc/cos/boot/grubcustom/custom.cfg
+
+# -------------------------------------------------------------
+# 2. 编写 Fake Boot Assessment 清理脚本
+#    开机自动抹除 /oem/grubenv 的评估标记，并维持 EFI 分区 default_fallback=0
+# -------------------------------------------------------------
+RUN mkdir -p /usr/local/bin && \
+    printf '#!/bin/bash\n\
+set -e\n\
+\n\
+# 1. 清理 COS_OEM (/oem) 分区里的脏回退标记\n\
+if [ -f "/oem/grubenv" ]; then\n\
+    grub2-editenv /oem/grubenv unset boot_assessment_check 2>/dev/null || true\n\
+    grub2-editenv /oem/grubenv unset last_boot_attempt 2>/dev/null || true\n\
+    grub2-editenv /oem/grubenv unset next_entry 2>/dev/null || true\n\
+    grub2-editenv /oem/grubenv set saved_entry=active 2>/dev/null || true\n\
+fi\n\
+\n\
+# 2. 确保 EFI 分区存在 custom.cfg 且锁定 default_fallback\n\
+EFI_MOUNT="/run/elemental/efi"\n\
+if [ -d "${EFI_MOUNT}" ]; then\n\
+    mount -o remount,rw "${EFI_MOUNT}" 2>/dev/null || mount -t vfat /dev/disk/by-label/COS_GRUB "${EFI_MOUNT}" -o rw 2>/dev/null || true\n\
+    mkdir -p "${EFI_MOUNT}/grubcustom"\n\
+    if [ ! -f "${EFI_MOUNT}/grubcustom/custom.cfg" ]; then\n\
+        printf '\''set default="active"\\nset saved_entry="active"\\nunset next_entry\\nunset fallback\\nset boot_assessment_check=""\\n'\'' > "${EFI_MOUNT}/grubcustom/custom.cfg" 2>/dev/null || true\n\
+    fi\n\
+    if [ -f "${EFI_MOUNT}/grub_oem_env" ]; then\n\
+        sed -i '\''s/default_fallback=.*/default_fallback=0        /'\'' "${EFI_MOUNT}/grub_oem_env" 2>/dev/null || true\n\
+        sed -i '\''s/boot_assessment=.*/boot_assessment=0/'\'' "${EFI_MOUNT}/grub_oem_env" 2>/dev/null || true\n\
+    fi\n\
+    mount -o remount,ro "${EFI_MOUNT}" 2>/dev/null || true\n\
+fi\n' > /usr/local/bin/fake-boot-assessment.sh && \
+    chmod 0755 /usr/local/bin/fake-boot-assessment.sh
+
+# -------------------------------------------------------------
+# 3. 注册并启用 fake-boot-assessment.service
+# -------------------------------------------------------------
+RUN printf '[Unit]\n\
+Description=Fake Elemental Boot Success Reporter\n\
+DefaultDependencies=no\n\
+After=local-fs.target\n\
+Before=multi-user.target\n\
+\n\
+[Service]\n\
+Type=oneshot\n\
+RemainAfterExit=yes\n\
+ExecStart=/usr/local/bin/fake-boot-assessment.sh\n\
+\n\
+[Install]\n\
+WantedBy=multi-user.target\n' > /etc/systemd/system/fake-boot-assessment.service && \
+    mkdir -p /etc/systemd/system/multi-user.target.wants && \
+    ln -sf /etc/systemd/system/fake-boot-assessment.service /etc/systemd/system/multi-user.target.wants/fake-boot-assessment.service
 
 # 1. 显式指定 openSUSE 的默认显示管理器为 sddm
 RUN mkdir -p /etc/sysconfig && \
