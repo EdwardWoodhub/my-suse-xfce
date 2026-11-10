@@ -55,23 +55,41 @@ RUN echo 'Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bi
 # ------------------------------
 # 4c. 固化 Recovery (8GB) 与 State (100GB) 分区大小
 # ------------------------------
-#RUN mkdir -p /etc/elemental && \
-#    printf 'install:\n  snapshotter:\n    type: btrfs\n  partitions:\n    recovery:\n      size: 8192\n    state:\n      size: 102400\n' > /etc/elemental/config.yaml
+RUN mkdir -p /etc/elemental && \
+    printf 'install:\n  snapshotter:\n    type: btrfs\n  partitions:\n    recovery:\n      size: 8192\n    state:\n      size: 102400\n' > /etc/elemental/config.yaml
 
 # ------------------------------
-# 4c. 固化 Elemental 基础配置（分区定义 + 锁死 GRUB 默认项为 0）
+# 4d. 直接 Patch 镜像底层所有 Elemental/GRUB 模板源文件
 # ------------------------------
-RUN mkdir -p /etc/elemental && \
-    printf 'install:\n\
-  snapshotter:\n\
-    type: btrfs\n\
-  partitions:\n\
-    recovery:\n\
-      size: 8192\n\
-    state:\n\
-      size: 102400\n\
-grub:\n\
-  fallback: "0"\n' > /etc/elemental/config.yaml
+RUN find /usr/share /usr/lib /etc -type f \( -name "*.cfg" -o -name "*.sh" -o -name "grub_*" -o -name "*.yaml" \) 2>/dev/null | \
+    xargs grep -l "default_fallback" 2>/dev/null | while read -r file; do \
+        echo "Patching GRUB fallback in: $file"; \
+        # 1. 匹配带引号的情况 (例如 default_fallback="0 1 2 3 4" 或单引号) 统一替换为 "0"
+        sed -i -E 's/default_fallback=["'\''][0-9 ]+["'\'']/default_fallback="0"/g' "$file"; \
+        # 2. 匹配完全不带引号的情况 (例如 default_fallback=0 1 2 3 4) 统一替换为 0
+        sed -i -E 's/default_fallback=[0-9 ]+$/default_fallback=0/g' "$file"; \
+    done || true
+
+# ------------------------------
+# 4e. 注入 Elemental 声明式 OEM 阶段钩子（双保险，拦截安装与升级写盘）
+# ------------------------------
+RUN mkdir -p /system/oem && \
+    printf '%s\n' \
+      'name: "Force GRUB Fallback to 0"' \
+      'stages:' \
+      '  install.after:' \
+      '    - name: "Lock default_fallback to 0 after installation"' \
+      '      commands:' \
+      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /run/elemental/efi/grub_oem_env 2>/dev/null || true' \
+      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /boot/efi/grub_oem_env 2>/dev/null || true' \
+      '  upgrade.after:' \
+      '    - name: "Lock default_fallback to 0 after upgrade"' \
+      '      commands:' \
+      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /run/elemental/efi/grub_oem_env 2>/dev/null || true' \
+      '        - sed -i "s/default_fallback=.*/default_fallback=0/" /boot/efi/grub_oem_env 2>/dev/null || true' \
+      > /system/oem/00_grub_patch.yaml
+
+
 
 # 1. 彻底屏蔽所有云边注册、自杀评估、自动重启以及网络阻断单元
 RUN mkdir -p /etc/systemd/system && \
