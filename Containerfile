@@ -10,6 +10,7 @@ RUN zypper --non-interactive ar -cfp 90 https://download.opensuse.org/distributi
 # glibc-locale-base解决btop：No UTF-8 locale detected
 RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
     zypper --non-interactive in \
+        adwaita-icon-theme \
         btop \
         fastfetch \
         fontconfig \
