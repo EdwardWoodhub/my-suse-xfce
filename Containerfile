@@ -20,6 +20,8 @@ RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
         htop \
         konsole \
         meld \
+        Mesa \
+        Mesa-dri \
         open-vm-tools \
         open-vm-tools-desktop \
         patterns-xfce-xfce \
