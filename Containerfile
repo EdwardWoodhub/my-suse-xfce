@@ -22,6 +22,7 @@ RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
         meld \
         Mesa \
         Mesa-dri \
+        # NetworkManager \ #默认有安装，不用显示安装
         open-vm-tools \
         open-vm-tools-desktop \
         patterns-xfce-xfce \
