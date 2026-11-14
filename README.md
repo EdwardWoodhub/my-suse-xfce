@@ -8,6 +8,13 @@ Containerfile
 
 [SUSE Linux Micro 6.2 Baremetal OS Container Container Image | SUSE Container Images](https://registry.suse.com/repositories/suse-sl-micro-6-2-baremetal-os-container)
 
+```
+podman run --rm registry.suse.com/suse/sl-micro/6.2/baremetal-os-container:latest rpm -qa | sort
+```
+```
+podman rmi registry.suse.com/suse/sl-micro/6.2/baremetal-os-container:latest
+```
+
 ## 基础镜像
 
 （1）选择SUSE的镜像更容易构建：
