@@ -2,6 +2,12 @@
 
 Containerfile
 
+# 基座
+
+## 软件包清单
+
+[SUSE Linux Micro 6.2 Baremetal OS Container Container Image | SUSE Container Images](https://registry.suse.com/repositories/suse-sl-micro-6-2-baremetal-os-container)
+
 ## 基础镜像
 
 （1）选择SUSE的镜像更容易构建：
