@@ -4,7 +4,7 @@ FROM registry.suse.com/suse/sl-micro/6.2/baremetal-os-container:latest
 # 2. 添加 openSUSE 官方标准仓库（包含 XFCE 与图形界面套件）
 RUN zypper --non-interactive ar -cfp 90 https://download.opensuse.org/distribution/leap/16.0/repo/oss/ oss || true && \
     zypper --non-interactive ar -cfp 90 https://download.opensuse.org/distribution/leap/16.0/repo/non-oss/ non-oss || true && \
-    zypper --non-interactive ar -cfp 90 https://download.opensuse.org/repositories/M17N:/fonts/16.0/ M17N-fonts || true 
+    zypper --non-interactive ar -cfp 95 https://download.opensuse.org/repositories/M17N:/fonts/16.0/ M17N-fonts || true 
 
 # 3. 导入 GPG 密钥并安装 XFCE 桌面环境与 SDDM
 # glibc-locale-base解决btop：No UTF-8 locale detected
